@@ -1,7 +1,6 @@
 # SentimentIQ — NLP Sentiment Analysis System
 
-Live Demo: Open SentimentIQ
-**Live Demo:** [Open SentimentIQ](https://sentimentiq-j3j6.onrender.com)
+
 
 A full-stack web application for sentiment analysis powered by NLTK, VADER, TextBlob, and optional Groq analysis.
 
