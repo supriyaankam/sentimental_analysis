@@ -12,3 +12,4 @@ nltk_data/
 .claude/
 .vscode/
 sentiment_app/uploads/*
+.DS_Store
