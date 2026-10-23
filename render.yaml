@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: sentimentiq
+    runtime: python
+    plan: starter
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python -m nltk.downloader -d /opt/render/project/src/nltk_data
+      vader_lexicon stopwords punkt averaged_perceptron_tagger wordnet
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    healthCheckPath: /healthz
+    disk:
+      name: sentimentiq-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: sentimentiq
+      - key: DATABASE_URL
+        value: sqlite:////var/data/sentiment.db
+      - key: NLTK_DATA
+        value: /opt/render/project/src/nltk_data
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: PASSWORD_RESET_CONSOLE_OTP
+        value: "false"

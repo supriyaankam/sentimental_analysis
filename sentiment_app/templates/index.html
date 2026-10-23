@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}SentimentIQ — Analyze Text{% endblock %}
+
+{% block content %}
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<section class="hero-section">
+  <div class="container-fluid px-4 py-5">
+    <div class="row align-items-center">
+      <div class="col-lg-7">
+        <div class="hero-badge mb-3">
+          <i class="bi bi-stars me-1"></i> AI-Powered Sentiment Analysis
+        </div>
+        <h1 class="hero-title">
+          Understand the <span class="text-gradient">emotion</span><br/>
+          behind any text
+        </h1>
+        <p class="hero-subtitle mt-3">
+          Analyse sentiment from any text, document, or data file using
+          VADER and TextBlob sentiment analysis — with a visual dashboard.
+        </p>
+
+        <!-- Quick stats -->
+        <div class="d-flex gap-4 mt-4 flex-wrap">
+          <div class="stat-chip">
+            <i class="bi bi-bar-chart-fill text-primary"></i>
+            <span><strong>{{ stats.total }}</strong> analyses</span>
+          </div>
+          <div class="stat-chip">
+            <i class="bi bi-emoji-smile-fill text-success"></i>
+            <span><strong>{{ stats.positive }}</strong> positive</span>
+          </div>
+          <div class="stat-chip">
+            <i class="bi bi-emoji-frown-fill text-danger"></i>
+            <span><strong>{{ stats.negative }}</strong> negative</span>
+          </div>
+          <div class="stat-chip">
+            <i class="bi bi-emoji-neutral-fill text-warning"></i>
+            <span><strong>{{ stats.neutral }}</strong> neutral</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5 mt-4 mt-lg-0">
+        <div class="feature-pills">
+          {% set features = [
+            ('filetype-pdf', 'PDF', 'danger'),
+            ('filetype-docx', 'DOCX', 'primary'),
+            ('filetype-csv', 'CSV', 'success'),
+            ('filetype-json', 'JSON', 'warning'),
+            ('filetype-xlsx', 'Excel', 'success'),
+            ('file-text', 'TXT', 'secondary'),
+          ] %}
+          {% for icon, label, color in features %}
+          <span class="feature-pill text-{{ color }}">
+            <i class="bi bi-{{ icon }}"></i> {{ label }}
+          </span>
+          {% endfor %}
+          <span class="feature-pill text-info">
+            <i class="bi bi-cpu"></i> VADER
+          </span>
+          <span class="feature-pill text-purple">
+            <i class="bi bi-balloon"></i> TextBlob
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Analyze Section ────────────────────────────────────────────────────── -->
+<section class="analyze-section py-5">
+  <div class="container-fluid px-4">
+    <div class="row g-4">
+
+      <!-- Text Input Card -->
+      <div class="col-lg-7">
+        <div class="card analysis-card h-100">
+          <div class="card-header">
+            <i class="bi bi-pencil-square me-2"></i>
+            <strong>Analyse Text</strong>
+            <span class="badge bg-primary ms-2">Real-time</span>
+          </div>
+          <div class="card-body">
+            <form action="{{ url_for('main.analyze') }}" method="POST" id="analyzeForm">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">Enter your text below</label>
+                <div class="form-text mb-2">Use one sentence or input per line. Each non-empty line is analyzed separately (up to 5,000 lines).</div>
+                <textarea
+                  class="form-control text-input"
+                  name="text"
+                  id="textInput"
+                  rows="8"
+                  maxlength="50000"
+                  placeholder="Type or paste any text here — reviews, tweets, articles, feedback, emails, long documents…"
+                  required
+                ></textarea>
+
+                <!-- Live counter bar -->
+                <div class="char-limit-bar mt-2">
+                  <div class="char-limit-track">
+                    <div class="char-limit-fill" id="charFill" style="width:0%"></div>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center mt-1">
+                    <small class="text-muted">
+                      <i class="bi bi-type me-1"></i><span id="wordCount">0</span> words &middot;
+                      <span id="charCount">0</span> / 50,000 characters
+                    </small>
+                    <small id="charWarning" class="text-warning d-none fw-semibold">
+                      <i class="bi bi-exclamation-triangle me-1"></i>Approaching limit
+                    </small>
+                  </div>
+                </div>
+
+                <!-- Over-limit alert (hidden by default) -->
+                <div id="overLimitAlert" class="alert alert-warning py-2 px-3 mt-2 d-none" role="alert">
+                  <i class="bi bi-scissors me-2"></i>
+                  Text exceeds 50,000 characters. It will be automatically trimmed before analysis.
+                </div>
+              </div>
+
+              <!-- Example texts -->
+              <div class="mb-3">
+                <label class="form-label text-muted small fw-semibold">Try an example:</label>
+                <div class="d-flex gap-2 flex-wrap">
+                  <button type="button" class="btn btn-sm btn-outline-success example-btn"
+                    data-text="This product is absolutely amazing! I love it so much. Best purchase I've ever made. Highly recommend to everyone!">
+                    <i class="bi bi-emoji-smile me-1"></i>Positive
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-danger example-btn"
+                    data-text="Terrible experience. The product broke after one day. Customer service was awful and unhelpful. Total waste of money.">
+                    <i class="bi bi-emoji-frown me-1"></i>Negative
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-warning example-btn"
+                    data-text="The product arrived on time. It works as described. Nothing special but gets the job done. Average quality for the price.">
+                    <i class="bi bi-emoji-neutral me-1"></i>Neutral
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary example-btn"
+                    data-text="I am not sure about this product. Some features are great but others need improvement. Mixed feelings overall about the experience.">
+                    <i class="bi bi-emoji-expressionless me-1"></i>Mixed
+                  </button>
+                </div>
+              </div>
+
+              <div class="d-flex gap-3 align-items-center">
+                <button type="submit" class="btn btn-analyze" id="analyzeBtn">
+                  <i class="bi bi-search me-2"></i>Analyse Sentiment
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="clearBtn">
+                  <i class="bi bi-trash me-1"></i>Clear
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- How it Works -->
+      <div class="col-lg-5">
+        <div class="card analysis-card h-100">
+          <div class="card-header">
+            <i class="bi bi-gear me-2"></i><strong>How It Works</strong>
+          </div>
+          <div class="card-body">
+            <div class="pipeline-steps">
+              {% set steps = [
+                ('1', 'bi-filter', 'primary', 'Text Preprocessing', 'Tokenisation, stopword removal, lemmatisation, POS tagging via NLTK.'),
+                ('2', 'bi-lightning-fill', 'warning', 'VADER Analysis', 'Rule-based lexicon model, optimised for social media and short text.'),
+                ('3', 'bi-balloon-fill', 'info', 'TextBlob Analysis', 'Pattern-based polarity (-1 to +1) and subjectivity (0 to 1) scores.'),
+                ('4', 'bi-trophy-fill', 'success', 'Combined Sentiment', 'VADER and TextBlob results are combined; VADER resolves a disagreement.'),
+              ] %}
+              {% for num, icon, color, title, desc in steps %}
+              <div class="pipeline-step">
+                <div class="step-num bg-{{ color }} text-white">{{ num }}</div>
+                <div class="step-content">
+                  <div class="step-title">
+                    <i class="bi {{ icon }} text-{{ color }} me-1"></i>{{ title }}
+                  </div>
+                  <div class="step-desc text-muted">{{ desc }}</div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="mt-4 text-center">
+              <a href="{{ url_for('main.upload') }}" class="btn btn-outline-primary w-100">
+                <i class="bi bi-cloud-upload me-2"></i>Upload a Document Instead
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Recent Analyses ────────────────────────────────────────────────────── -->
+{% if recent %}
+<section class="recent-section pb-5">
+  <div class="container-fluid px-4">
+    <div class="section-header mb-4">
+      <h5 class="mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Recent Analyses</h5>
+      <a href="{{ url_for('main.history') }}" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    <div class="row g-3">
+      {% for item in recent %}
+      <div class="col-md-6 col-xl-4">
+        <a href="{{ url_for('main.result', result_id=item.id) }}" class="card recent-card text-decoration-none">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <span class="sentiment-badge badge-{{ item.final_sentiment }}">
+                <i class="bi bi-{% if item.final_sentiment == 'positive' %}emoji-smile{% elif item.final_sentiment == 'negative' %}emoji-frown{% elif item.final_sentiment == 'mixed' %}emoji-smile-upside-down{% else %}emoji-neutral{% endif %} me-1"></i>
+                {{ item.final_sentiment | capitalize }}
+              </span>
+              <small class="text-muted">{{ item.created_at.strftime('%b %d, %H:%M') }}</small>
+            </div>
+            <p class="card-text text-muted small mb-2 text-truncate-2">
+              {{ item.input_text[:120] }}{% if item.input_text|length > 120 %}…{% endif %}
+            </p>
+            <div class="d-flex gap-3">
+              <small class="text-muted"><i class="bi bi-bar-chart me-1"></i>{{ '%.2f'|format(item.vader_compound or 0) }}</small>
+              <small class="text-muted"><i class="bi bi-file-text me-1"></i>{{ item.word_count }} words</small>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const MAX_CHARS   = 50000;
+  const WARN_AT     = 0.85; // show warning at 85%
+  const textInput   = document.getElementById('textInput');
+  const wordCountEl = document.getElementById('wordCount');
+  const charCountEl = document.getElementById('charCount');
+  const charFill    = document.getElementById('charFill');
+  const charWarning = document.getElementById('charWarning');
+  const overLimit   = document.getElementById('overLimitAlert');
+
+  function updateCounter() {
+    const len  = textInput.value.length;
+    const pct  = Math.min(len / MAX_CHARS * 100, 100);
+    const words= textInput.value.trim() ? textInput.value.trim().split(/\s+/).length : 0;
+
+    charCountEl.textContent = len.toLocaleString();
+    wordCountEl.textContent = words.toLocaleString();
+    charFill.style.width    = pct + '%';
+
+    // Colour the fill bar
+    charFill.className = 'char-limit-fill';
+    if (pct >= 100)      charFill.classList.add('fill-over');
+    else if (pct >= 85)  charFill.classList.add('fill-warn');
+    else                 charFill.classList.add('fill-ok');
+
+    // Warning labels
+    charWarning.classList.toggle('d-none', pct < 85);
+    overLimit.classList.toggle('d-none', len <= MAX_CHARS);
+  }
+
+  textInput.addEventListener('input', updateCounter);
+
+  document.querySelectorAll('.example-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      textInput.value = btn.dataset.text;
+      updateCounter();
+    });
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    textInput.value = '';
+    updateCounter();
+    textInput.focus();
+  });
+
+  document.getElementById('analyzeForm').addEventListener('submit', () => {
+    const btn = document.getElementById('analyzeBtn');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analysing…';
+    btn.disabled = true;
+  });
+</script>
+{% endblock %}

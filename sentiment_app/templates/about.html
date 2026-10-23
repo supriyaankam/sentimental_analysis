@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}About — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-5 fade-in">
+
+  <!-- Hero -->
+  <div class="about-hero mb-5">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-7">
+        <div class="hero-badge mb-3"><i class="bi bi-stars me-1"></i>Open-Source NLP Project</div>
+        <h1 class="hero-title">About <span class="text-gradient">SentimentIQ</span></h1>
+        <p class="hero-subtitle mt-3">
+          A full-stack sentiment analysis system combining VADER and TextBlob,
+          emotion detection, readability scoring, and a visual analytics dashboard.
+        </p>
+        <div class="d-flex gap-3 mt-4 flex-wrap">
+          <a href="{{ url_for('main.index') }}"    class="btn btn-analyze">Try It Now</a>
+          <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary">View Dashboard</a>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="about-stats-grid">
+          <div class="about-stat-card">
+            <div class="about-stat-num text-primary">{{ stats.total }}</div>
+            <div class="about-stat-lbl">Analyses Run</div>
+          </div>
+          <div class="about-stat-card">
+            <div class="about-stat-num text-success">{{ stats.pos }}</div>
+            <div class="about-stat-lbl">Positive Results</div>
+          </div>
+          <div class="about-stat-card">
+            <div class="about-stat-num text-danger">{{ stats.neg }}</div>
+            <div class="about-stat-lbl">Negative Results</div>
+          </div>
+          <div class="about-stat-card">
+            <div class="about-stat-num text-warning">{{ stats.batches }}</div>
+            <div class="about-stat-lbl">Files Processed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NLP Pipeline -->
+  <div class="row g-4 mb-5">
+    <div class="col-12">
+      <h4 class="fw-bold mb-4"><i class="bi bi-diagram-3 me-2 text-primary"></i>NLP Analysis Pipeline</h4>
+    </div>
+
+    {% set pipeline = [
+      ('1','bi-funnel-fill','primary','Text Preprocessing','NLTK tokenisation, stopword removal, lemmatisation (WordNetLemmatizer), stemming (PorterStemmer), and POS tagging using the averaged perceptron tagger.'),
+      ('2','bi-lightning-fill','warning','VADER Analysis','Valence Aware Dictionary and sEntiment Reasoner — a rule-based model specifically tuned for social media, short text, and informal language. Returns compound, positive, negative, and neutral scores.'),
+      ('3','bi-balloon-fill','info','TextBlob Analysis','Pattern-based polarity (-1 to +1) and subjectivity (0 to 1) scoring. Excellent for longer, more structured text like reviews and articles.'),
+      ('4','bi-heart-pulse-fill','pink','Emotion Detection','NRCLex maps text to 8 Plutchik emotions: Joy, Sadness, Anger, Fear, Surprise, Disgust, Trust, and Anticipation — with a dominant emotion highlight.'),
+      ('5','bi-translate','success','Language Detection','langdetect identifies the language of the input. Sentiment tools are optimised for English, so non-English inputs receive a warning.'),
+      ('6','bi-book-fill','secondary','Readability Scoring','textstat computes Flesch-Kincaid Grade, Flesch Reading Ease, and Gunning Fog Index — giving a readability level from "Very Easy" to "Very Difficult".'),
+      ('7','bi-trophy-fill','success','Combined Sentiment','VADER and TextBlob results are combined; VADER resolves a disagreement.'),
+    ] %}
+
+    {% for num, icon, color, title, desc in pipeline %}
+    <div class="col-md-6 col-lg-3 slide-up" style="animation-delay:{{ loop.index0*0.06 }}s">
+      <div class="card about-pipeline-card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="step-num bg-{{ color }} text-white" style="width:32px;height:32px;font-size:0.85rem;">{{ num }}</div>
+            <i class="bi {{ icon }} text-{{ color }} fs-4"></i>
+          </div>
+          <h6 class="fw-bold mb-2">{{ title }}</h6>
+          <p class="text-muted small mb-0" style="line-height:1.55">{{ desc }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Tech Stack + File Formats -->
+  <div class="row g-4 mb-5">
+
+    <div class="col-lg-6">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-stack me-2"></i><strong>Technology Stack</strong></div>
+        <div class="card-body">
+          <div class="tech-grid">
+            {% set tech = [
+              ('Python 3.11','bi-filetype-py','primary'),
+              ('Flask 3.x','bi-server','info'),
+              ('SQLAlchemy','bi-database','warning'),
+              ('NLTK 3.10','bi-braces','success'),
+              ('TextBlob','bi-balloon','info'),
+              ('VADER','bi-lightning','warning'),
+              ('NRCLex','bi-heart-pulse','pink'),
+              ('textstat','bi-book','secondary'),
+              ('langdetect','bi-translate','success'),
+              ('WordCloud','bi-cloud','purple'),
+              ('Matplotlib','bi-bar-chart','danger'),
+              ('Chart.js 4','bi-pie-chart','primary'),
+              ('PyPDF2','bi-filetype-pdf','danger'),
+              ('python-docx','bi-filetype-docx','primary'),
+              ('pandas','bi-table','success'),
+              ('Bootstrap 5','bi-bootstrap','purple'),
+            ] %}
+            {% for name, icon, color in tech %}
+            <div class="tech-item">
+              <i class="bi {{ icon }} text-{{ color }}"></i>
+              <span>{{ name }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-files me-2"></i><strong>Supported File Formats</strong></div>
+        <div class="card-body">
+          {% set formats = [
+            ('filetype-pdf','PDF','danger','Extracts text from each page using PyPDF2. Works best with text-based PDFs.'),
+            ('filetype-docx','DOCX','primary','Extracts all paragraphs and table cells from Word documents.'),
+            ('filetype-csv','CSV','success','Auto-detects text/review/comment columns. Falls back to all string columns.'),
+            ('filetype-json','JSON','warning','Recursively extracts string values from any nested JSON structure.'),
+            ('file-spreadsheet','XLSX / XLS','success','Reads all sheets with smart column detection.'),
+            ('file-text','TXT','secondary','Splits by blank lines (paragraphs) or lines.'),
+          ] %}
+          <div class="format-list">
+            {% for icon, label, color, desc in formats %}
+            <div class="format-list-item">
+              <i class="bi bi-{{ icon }} text-{{ color }} fs-4"></i>
+              <div>
+                <div class="fw-semibold small">{{ label }}</div>
+                <div class="text-muted" style="font-size:0.78rem">{{ desc }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Section -->
+  <div class="row g-4">
+    <div class="col-12">
+      <div class="card score-card">
+        <div class="card-header"><i class="bi bi-plug me-2"></i><strong>REST API Endpoints</strong></div>
+        <div class="card-body">
+          <p class="text-muted mb-4">
+            SentimentIQ exposes a simple JSON API so you can integrate sentiment analysis directly into your own applications.
+          </p>
+
+          <div class="row g-4">
+
+            <!-- POST /api/analyze -->
+            <div class="col-md-6">
+              <div class="api-card">
+                <div class="api-card-header">
+                  <span class="api-method-badge post">POST</span>
+                  <span class="api-card-path">/api/analyze</span>
+                </div>
+                <p class="text-muted small mt-2 mb-3">Analyse a single text string and get full sentiment results instantly.</p>
+                <div class="api-fields">
+                  <div class="api-field-row">
+                    <i class="bi bi-arrow-right-circle text-primary"></i>
+                    <div>
+                      <div class="fw-semibold small">Input</div>
+                      <div class="text-muted" style="font-size:0.8rem">JSON body with a <code>text</code> field containing your text</div>
+                    </div>
+                  </div>
+                  <div class="api-field-row">
+                    <i class="bi bi-arrow-left-circle text-success"></i>
+                    <div>
+                      <div class="fw-semibold small">Returns</div>
+                      <div class="text-muted" style="font-size:0.8rem">Final sentiment, intensity level, VADER scores, TextBlob polarity, emotion breakdown, readability scores, top keywords</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="api-response-fields mt-3">
+                  <div class="api-resp-item"><span class="api-resp-key">final_sentiment</span><span class="api-resp-val">positive / negative / neutral / mixed</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">intensity</span><span class="api-resp-val">Strongly Positive → Strongly Negative</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">vader.compound</span><span class="api-resp-val">Float from -1.0 to +1.0</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">emotions.dominant</span><span class="api-resp-val">joy / anger / sadness / fear …</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">readability.reading_level</span><span class="api-resp-val">Easy / Difficult / Very Easy …</span></div>
+                </div>
+                <div class="mt-3">
+                  <a href="{{ url_for('main.index') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-play-fill me-1"></i>Try It Now
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- GET /api/dashboard -->
+            <div class="col-md-6">
+              <div class="api-card">
+                <div class="api-card-header">
+                  <span class="api-method-badge get">GET</span>
+                  <span class="api-card-path">/api/dashboard</span>
+                </div>
+                <p class="text-muted small mt-2 mb-3">Retrieve aggregated analytics data for all stored analyses, with optional date filtering.</p>
+                <div class="api-fields">
+                  <div class="api-field-row">
+                    <i class="bi bi-funnel text-warning"></i>
+                    <div>
+                      <div class="fw-semibold small">Optional Filters</div>
+                      <div class="text-muted" style="font-size:0.8rem">
+                        <code>?from=YYYY-MM-DD</code> and <code>?to=YYYY-MM-DD</code> to scope results to a date range
+                      </div>
+                    </div>
+                  </div>
+                  <div class="api-field-row">
+                    <i class="bi bi-arrow-left-circle text-success"></i>
+                    <div>
+                      <div class="fw-semibold small">Returns</div>
+                      <div class="text-muted" style="font-size:0.8rem">Total count, sentiment distribution, daily trend, analyser comparison, word frequencies, avg compound and subjectivity</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="api-response-fields mt-3">
+                  <div class="api-resp-item"><span class="api-resp-key">total</span><span class="api-resp-val">Number of records in range</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">sentiment_distribution</span><span class="api-resp-val">Counts per positive/negative/neutral</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">trend</span><span class="api-resp-val">Daily sentiment counts (time series)</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">word_frequencies</span><span class="api-resp-val">Top 100 lemma frequencies</span></div>
+                  <div class="api-resp-item"><span class="api-resp-key">avg_compound</span><span class="api-resp-val">Average VADER compound score</span></div>
+                </div>
+                <div class="mt-3">
+                  <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-speedometer2 me-1"></i>View Dashboard
+                  </a>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

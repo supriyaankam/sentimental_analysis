@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}500 — Server Error — SentimentIQ{% endblock %}
+{% block content %}
+<div class="error-page fade-in">
+  <div class="error-code text-danger">500</div>
+  <div class="error-icon text-danger"><i class="bi bi-exclamation-triangle-fill"></i></div>
+  <h2 class="error-title">Internal Server Error</h2>
+  <p class="error-desc text-muted">Something went wrong on our end. Please try again or go back home.</p>
+  <div class="d-flex gap-3 justify-content-center mt-4">
+    <a href="{{ url_for('main.index') }}" class="btn btn-analyze"><i class="bi bi-house me-2"></i>Go Home</a>
+  </div>
+</div>
+{% endblock %}

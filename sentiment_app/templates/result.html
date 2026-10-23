@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Result #{{ record.id }} — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-5 fade-in">
+
+  <!-- Breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('main.history') }}">History</a></li>
+      <li class="breadcrumb-item active">Result #{{ record.id }}</li>
+    </ol>
+  </nav>
+
+  <!-- ── Verdict Banner ──────────────────────────────────────────────────── -->
+  <div class="verdict-banner verdict-{{ record.final_sentiment }} mb-4 slide-up">
+    <div class="row align-items-center g-3">
+      <div class="col-auto">
+        <div class="verdict-icon">
+          {% if record.final_sentiment == 'positive' %}<i class="bi bi-emoji-smile-fill"></i>
+          {% elif record.final_sentiment == 'negative' %}<i class="bi bi-emoji-frown-fill"></i>
+          {% elif record.final_sentiment == 'mixed' %}<i class="bi bi-emoji-smile-upside-down-fill"></i>
+          {% else %}<i class="bi bi-emoji-neutral-fill"></i>{% endif %}
+        </div>
+      </div>
+      <div class="col">
+        <div class="verdict-label">Final Sentiment (VADER + TextBlob{% if record.final_sentiment == 'mixed' %} + clause analysis{% endif %})</div>
+        <div class="verdict-value">{{ record.final_sentiment | upper }}</div>
+        <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+          {% if nlp and nlp.intensity %}
+          <span class="intensity-badge intensity-{{ nlp.intensity | lower | replace(' ', '-') }}">
+            <i class="bi bi-lightning-fill me-1"></i>{{ nlp.intensity }}
+          </span>
+          {% endif %}
+          {% if nlp and nlp.language and nlp.language.warning %}
+          <span class="badge bg-warning text-dark">
+            <i class="bi bi-translate me-1"></i>{{ nlp.language.warning }}
+          </span>
+          {% endif %}
+        </div>
+        <div class="verdict-sub mt-2">
+          VADER: <strong>{{ '%.3f'|format(record.vader_compound or 0) }}</strong> &middot;
+          TextBlob: <strong>{{ '%.3f'|format(record.textblob_polarity or 0) }}</strong> &middot;
+        </div>
+      </div>
+      <div class="col-auto d-flex gap-2 flex-wrap">
+        <div class="dropdown">
+          <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i>Export PDF
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <a class="dropdown-item" target="_blank" rel="noopener"
+                 href="{{ url_for('main.result_pdf_report', result_id=record.id) }}">
+                <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Open PDF Report
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item"
+                 href="{{ url_for('main.result_pdf_report', result_id=record.id, download=1) }}">
+                <i class="bi bi-download me-2 text-danger"></i>Download PDF Report
+              </a>
+            </li>
+          </ul>
+        </div>
+        <a href="{{ url_for('main.index') }}" class="btn btn-light btn-sm">
+          <i class="bi bi-plus-circle me-1"></i>New Analysis
+        </a>
+        <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal">
+          <i class="bi bi-trash me-1"></i>Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 1: Gauge + Analyser Cards ─────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+
+    <!-- Compound Gauge -->
+    <div class="col-lg-3">
+      <div class="card score-card h-100 slide-up" style="animation-delay:0.05s">
+        <div class="card-header"><i class="bi bi-speedometer me-2"></i><strong>Sentiment Gauge</strong></div>
+        <div class="card-body d-flex flex-column align-items-center justify-content-center gap-3">
+          <div class="gauge-wrap">
+            <canvas id="gaugeChart"></canvas>
+            <div class="gauge-center-label">
+              <div class="gauge-val" id="gaugeVal">{{ '%.2f'|format(record.vader_compound or 0) }}</div>
+              <div class="gauge-sub">compound</div>
+            </div>
+          </div>
+          <div class="text-center">
+            <div class="small text-muted">VADER Compound Score</div>
+            <div class="small text-muted mt-1">Range: -1.0 (most negative) → +1.0 (most positive)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analyser Cards -->
+    <div class="col-lg-9">
+      <h6 class="section-label mb-3"><i class="bi bi-cpu me-2"></i>Analyser Breakdown</h6>
+      <div class="row g-3">
+
+        <!-- VADER -->
+        <div class="col-md-6 slide-up" style="animation-delay:0.1s">
+          <div class="card score-card h-100">
+            <div class="card-body">
+              <div class="score-card-header">
+                <span class="score-engine">VADER</span>
+                <span class="sentiment-badge badge-{{ record.vader_sentiment }}">{{ record.vader_sentiment|capitalize }}</span>
+              </div>
+              <div class="score-desc text-muted small mb-3">Rule-based lexicon model</div>
+              {% for label, val, cls in [
+                ('Compound', record.vader_compound, 'compound'),
+                ('Positive', record.vader_pos, 'pos'),
+                ('Negative', record.vader_neg, 'neg'),
+                ('Neutral',  record.vader_neu, 'neu')
+              ] %}
+              <div class="score-row">
+                <span>{{ label }}</span>
+                <div class="score-bar-wrap">
+                  {% if cls == 'compound' %}
+                    {% set pct = ((val or 0)+1)/2*100 %}
+                    <div class="score-bar"><div class="score-fill {% if (val or 0)>=0.05 %}fill-pos{% elif (val or 0)<=-0.05 %}fill-neg{% else %}fill-neu{% endif %}" style="width:{{ pct }}%"></div></div>
+                  {% else %}
+                    <div class="score-bar"><div class="score-fill fill-{% if cls=='pos' %}pos{% elif cls=='neg' %}neg{% else %}neu{% endif %}" style="width:{{ (val or 0)*100 }}%"></div></div>
+                  {% endif %}
+                  <span class="score-value">{{ '%.3f'|format(val or 0) }}</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- TextBlob -->
+        <div class="col-md-6 slide-up" style="animation-delay:0.15s">
+          <div class="card score-card h-100">
+            <div class="card-body">
+              <div class="score-card-header">
+                <span class="score-engine">TextBlob</span>
+                <span class="sentiment-badge badge-{{ record.textblob_sentiment }}">{{ record.textblob_sentiment|capitalize }}</span>
+              </div>
+              <div class="score-desc text-muted small mb-3">Pattern-based polarity model</div>
+              <div class="score-row">
+                <span>Polarity</span>
+                <div class="score-bar-wrap">
+                  {% set p = ((record.textblob_polarity or 0)+1)/2*100 %}
+                  <div class="score-bar"><div class="score-fill {% if (record.textblob_polarity or 0)>0.05 %}fill-pos{% elif (record.textblob_polarity or 0)<-0.05 %}fill-neg{% else %}fill-neu{% endif %}" style="width:{{ p }}%"></div></div>
+                  <span class="score-value">{{ '%.3f'|format(record.textblob_polarity or 0) }}</span>
+                </div>
+              </div>
+              <div class="score-row">
+                <span>Subjectivity</span>
+                <div class="score-bar-wrap">
+                  <div class="score-bar"><div class="score-fill fill-info" style="width:{{ (record.textblob_subjectivity or 0)*100 }}%"></div></div>
+                  <span class="score-value">{{ '%.3f'|format(record.textblob_subjectivity or 0) }}</span>
+                </div>
+              </div>
+              <div class="mt-3 p-3 rounded-3 bg-soft">
+                <small class="text-muted d-block mb-1">Subjectivity Level</small>
+                {% set s = record.textblob_subjectivity or 0 %}
+                {% if s < 0.3 %}<span class="badge bg-info">Mostly Objective</span>
+                {% elif s < 0.6 %}<span class="badge bg-secondary">Balanced</span>
+                {% else %}<span class="badge bg-warning text-dark">Highly Subjective</span>{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {% if record.groq_sentiment or record.groq_explanation %}
+  <div class="card score-card mb-4">
+    <div class="card-header"><i class="bi bi-stars me-2"></i><strong>Groq AI Analysis</strong></div>
+    <div class="card-body">
+      {% if record.groq_sentiment %}<span class="sentiment-badge badge-{{ record.groq_sentiment }}">{{ record.groq_sentiment|capitalize }}</span>{% endif %}
+      {% if record.groq_explanation %}<p class="mt-3 mb-0">{{ record.groq_explanation }}</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Row 2: Emotions + Readability + Text Stats ──────────────────── -->
+  <div class="row g-4 mb-4">
+
+    <!-- Emotions -->
+    {% if nlp and nlp.emotions %}
+    <div class="col-lg-4 slide-up" style="animation-delay:0.25s">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-heart-pulse me-2"></i><strong>Emotion Detection</strong></div>
+        <div class="card-body">
+          {% set emotions = nlp.emotions %}
+          {% set emo_icons = {'joy':'emoji-laughing','sadness':'cloud-drizzle','anger':'fire','fear':'exclamation-triangle','surprise':'stars','disgust':'emoji-dizzy','trust':'shield-check','anticipation':'hourglass-split'} %}
+          {% set emo_colors = {'joy':'#f39c12','sadness':'#3498db','anger':'#e74c3c','fear':'#9b59b6','surprise':'#1abc9c','disgust':'#e67e22','trust':'#2ecc71','anticipation':'#f472b6'} %}
+          {% if emotions.dominant and emotions.dominant != 'none' %}
+          <div class="dominant-emotion mb-3">
+            <div class="dominant-label text-muted small fw-semibold mb-1">Dominant Emotion</div>
+            <div class="dominant-value">
+              <i class="bi bi-{{ emo_icons.get(emotions.dominant, 'emoji-smile') }}" style="color:{{ emo_colors.get(emotions.dominant,'#fff') }}"></i>
+              {{ emotions.dominant | capitalize }}
+            </div>
+          </div>
+          {% endif %}
+          <div class="emotion-bars">
+            {% for emo in ['joy','sadness','anger','fear','surprise','disgust','trust','anticipation'] %}
+            {% set val = emotions.get(emo, 0) %}
+            <div class="emo-row">
+              <span class="emo-label">
+                <i class="bi bi-{{ emo_icons.get(emo,'circle') }}" style="color:{{ emo_colors.get(emo,'#fff') }}"></i>
+                {{ emo|capitalize }}
+              </span>
+              <div class="emo-bar-wrap">
+                <div class="emo-bar">
+                  <div class="emo-fill" style="width:{{ (val*100)|round(1) }}%; background:{{ emo_colors.get(emo,'#818cf8') }}"></div>
+                </div>
+                <span class="emo-val">{{ '%.2f'|format(val) }}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Readability + Text Stats -->
+    <div class="col-lg-{% if nlp and nlp.emotions %}4{% else %}6{% endif %} slide-up" style="animation-delay:0.3s">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-file-text me-2"></i><strong>Text Statistics</strong></div>
+        <div class="card-body">
+          <div class="row g-3 text-center mb-3">
+            <div class="col-4">
+              <div class="stat-box">
+                <div class="stat-num text-primary">{{ record.word_count or 0 }}</div>
+                <div class="stat-lbl">Words</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-box">
+                <div class="stat-num text-info">{{ record.sentence_count or 0 }}</div>
+                <div class="stat-lbl">Sentences</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="stat-box">
+                <div class="stat-num text-warning">{{ record.input_text|length }}</div>
+                <div class="stat-lbl">Characters</div>
+              </div>
+            </div>
+          </div>
+
+          {% if nlp and nlp.readability %}
+          <hr/>
+          <h6 class="text-muted small fw-semibold mb-2"><i class="bi bi-book me-1"></i>Readability</h6>
+          <div class="readability-grid">
+            <div class="read-item">
+              <div class="read-val text-primary">{{ nlp.readability.flesch_kincaid_grade }}</div>
+              <div class="read-lbl">FK Grade</div>
+            </div>
+            <div class="read-item">
+              <div class="read-val text-success">{{ nlp.readability.flesch_reading_ease }}</div>
+              <div class="read-lbl">Ease Score</div>
+            </div>
+            <div class="read-item">
+              <div class="read-val text-warning">{{ nlp.readability.gunning_fog }}</div>
+              <div class="read-lbl">Gunning Fog</div>
+            </div>
+          </div>
+          <div class="mt-2 text-center">
+            <span class="badge bg-primary px-3 py-2">{{ nlp.readability.reading_level }}</span>
+          </div>
+          {% endif %}
+
+          {% if record.top_keywords %}
+          <hr/>
+          <h6 class="text-muted small fw-semibold mb-2">Top Keywords</h6>
+          <div class="keyword-cloud">
+            {% for kw in record.top_keywords.split(', ') %}
+            <span class="keyword-tag">{{ kw }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <hr/>
+          <div class="d-flex gap-3 text-muted small flex-wrap">
+            <span><i class="bi bi-clock me-1"></i>{{ record.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            <span><i class="bi bi-tag me-1"></i>{{ record.source_type|capitalize }}</span>
+            {% if record.source_filename %}<span><i class="bi bi-file me-1"></i>{{ record.source_filename }}</span>{% endif %}
+            {% if nlp and nlp.language %}<span><i class="bi bi-translate me-1"></i>{{ nlp.language.language|upper }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Original Text -->
+    <div class="col-lg-{% if nlp and nlp.emotions %}4{% else %}6{% endif %} slide-up" style="animation-delay:0.35s">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-quote me-2"></i><strong>Original Text</strong></div>
+        <div class="card-body">
+          <div class="original-text-box">{{ record.input_text }}</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Sentence-Level Analysis ────────────────────────────────────────── -->
+  {% if nlp and nlp.sentences and nlp.sentences|length > 1 %}
+  <div class="row g-4 mb-4">
+    <div class="col-12 slide-up" style="animation-delay:0.4s">
+      <div class="card score-card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-list-ul me-2"></i><strong>Sentence-Level Analysis</strong></span>
+          <span class="badge bg-primary">{{ nlp.sentences|length }} sentences</span>
+        </div>
+        <div class="card-body">
+          <div class="sentence-list">
+            {% for s in nlp.sentences %}
+            <div class="sentence-item sentence-{{ s.sentiment }}">
+              <div class="sentence-bar-indicator sentiment-indicator-{{ s.sentiment }}"></div>
+              <div class="sentence-content">
+                <div class="sentence-text">{{ s.text }}</div>
+                <div class="sentence-meta">
+                  <span class="sentiment-badge badge-{{ s.sentiment }} badge-sm">{{ s.sentiment|capitalize }}</span>
+                  <span class="text-muted small">compound: <strong class="{% if s.compound >= 0.05 %}text-success{% elif s.compound <= -0.05 %}text-danger{% else %}text-warning{% endif %}">{{ '%.3f'|format(s.compound) }}</strong></span>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Word Cloud + POS Tags ──────────────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+
+    {% if wordcloud %}
+    <div class="col-lg-7 slide-up" style="animation-delay:0.45s">
+      <div class="card score-card">
+        <div class="card-header"><i class="bi bi-cloud me-2"></i><strong>Word Cloud</strong></div>
+        <div class="card-body text-center p-2">
+          <img src="data:image/png;base64,{{ wordcloud }}" class="img-fluid rounded-3 wordcloud-img" alt="Word Cloud"/>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if nlp and nlp.pos_tags %}
+    <div class="col-lg-5 slide-up" style="animation-delay:0.5s">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-tags me-2"></i><strong>POS Tags</strong></div>
+        <div class="card-body">
+          <div class="pos-tags-wrap">
+            {% for word, tag in nlp.pos_tags %}
+            <div class="pos-tag-item">
+              <span class="pos-word">{{ word }}</span>
+              <span class="pos-label">{{ tag }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          <small class="text-muted mt-3 d-block">NN=Noun · VB=Verb · JJ=Adj · RB=Adverb · PRP=Pronoun</small>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+<!-- ── Delete Modal ──────────────────────────────────────────────────────── -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border);">
+      <div class="modal-header border-0">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Delete Result</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-muted">
+        Are you sure you want to delete Result #{{ record.id }}? This cannot be undone.
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <form action="{{ url_for('main.delete_result', result_id=record.id) }}" method="POST" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Compound Gauge (half-doughnut) ────────────────────────────────────────────
+const compound = {{ record.vader_compound or 0 }};
+const gaugeVal = Math.abs(compound);
+const isPos    = compound >= 0.05;
+const isNeg    = compound <= -0.05;
+const color    = isPos ? '#2ecc71' : (isNeg ? '#e74c3c' : '#f39c12');
+
+// Half doughnut: 0.5 rotation, data = [value, rest, hidden]
+const gCtx = document.getElementById('gaugeChart').getContext('2d');
+new Chart(gCtx, {
+  type: 'doughnut',
+  data: {
+    datasets: [{
+      data: [gaugeVal, 1 - gaugeVal, 1],
+      backgroundColor: [color, 'rgba(255,255,255,0.07)', 'transparent'],
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    rotation: -90,
+    circumference: 180,
+    cutout: '72%',
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    animation: { animateRotate: true, duration: 900 },
+  }
+});
+</script>
+{% endblock %}

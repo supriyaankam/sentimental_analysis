@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-5 fade-in">
+
+  <div class="page-header mb-5">
+    <h2 class="page-title"><i class="bi bi-speedometer2 me-2 text-primary"></i>Analytics Dashboard</h2>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <!-- Date range filter -->
+      <div class="d-flex gap-2 align-items-center" id="dateFilterWrap">
+        <input type="date" class="form-control form-control-sm dark-input" id="dateFrom" style="width:140px" title="From date"/>
+        <span class="text-muted small">to</span>
+        <input type="date" class="form-control form-control-sm dark-input" id="dateTo" style="width:140px" title="To date"/>
+        <button class="btn btn-sm btn-outline-primary" id="applyDateBtn"><i class="bi bi-funnel me-1"></i>Filter</button>
+        <button class="btn btn-sm btn-outline-secondary" id="clearDateBtn"><i class="bi bi-x me-1"></i>Clear</button>
+      </div>
+      <button class="btn btn-sm btn-outline-secondary" id="refreshBtn">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+      <a href="{{ url_for('main.upload') }}" class="btn btn-sm btn-primary">
+        <i class="bi bi-cloud-upload me-1"></i>Upload More
+      </a>
+    </div>
+  </div>
+
+  {% if empty %}
+  <div class="empty-dashboard">
+    <div class="empty-icon"><i class="bi bi-bar-chart-line"></i></div>
+    <h4>No Data Yet</h4>
+    <p class="text-muted">Start by analysing some text or uploading a document.</p>
+    <div class="d-flex gap-3 justify-content-center mt-4">
+      <a href="{{ url_for('main.index') }}" class="btn btn-primary"><i class="bi bi-pencil me-2"></i>Analyse Text</a>
+      <a href="{{ url_for('main.upload') }}" class="btn btn-outline-primary"><i class="bi bi-upload me-2"></i>Upload File</a>
+    </div>
+  </div>
+
+  {% else %}
+
+  <div id="dashboardStatus" class="alert alert-warning d-none" role="status"></div>
+
+  <!-- ── KPI Row ─────────────────────────────────────────────────────────── -->
+  <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-4 mb-4" id="kpiRow">
+    {% for kid, icon, cls in [('kpiTotal','collection-fill','kpi-total'),('kpiPositive','emoji-smile-fill','kpi-positive'),('kpiNegative','emoji-frown-fill','kpi-negative'),('kpiNeutral','emoji-neutral-fill','kpi-neutral'),('kpiMixed','arrow-left-right','kpi-mixed')] %}
+    <div class="col">
+      <div class="kpi-card {{ cls }} slide-up" style="animation-delay:{{ loop.index0 * 0.08 }}s">
+        <div class="kpi-icon"><i class="bi bi-{{ icon }}"></i></div>
+        <div class="kpi-value {% if kid != 'kpiMixed' %}skeleton-text{% endif %}" id="{{ kid }}">{% if kid == 'kpiMixed' %}{{ mixed_count }}{% else %}—{% endif %}</div>
+        <div class="kpi-label">{{ ['Total Analyses','Positive','Negative','Neutral','Mixed'][loop.index0] }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ── Row 2: Pie + Trend ─────────────────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.1s">
+        <div class="card-header"><i class="bi bi-pie-chart me-2"></i><strong>Sentiment Distribution</strong></div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <div style="position:relative;width:100%;max-width:280px;">
+            <canvas id="pieChart"></canvas>
+            <div class="pie-center-label">
+              <div id="pieCenterVal" class="skeleton-text">—</div>
+              <div class="pie-center-sub">analyses</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.15s">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span><i class="bi bi-graph-up me-2"></i><strong>Sentiment Trend Over Time</strong></span>
+          <div class="btn-group btn-group-sm" id="trendToggle">
+            <button class="btn btn-outline-secondary active" data-mode="all">All</button>
+            <button class="btn btn-outline-success"   data-mode="positive">Positive</button>
+            <button class="btn btn-outline-danger"    data-mode="negative">Negative</button>
+            <button class="btn btn-outline-warning"   data-mode="neutral">Neutral</button>
+            <button class="btn btn-outline-secondary" data-mode="mixed">Mixed</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <p id="trendSingleDayNotice" class="text-muted small mb-2 d-none">
+            Only one analysis date is available. Showing sentiment counts for that date; analyses from additional dates will appear as a trend.
+          </p>
+          <div style="position:relative;height:280px;">
+            <canvas id="trendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 3: Bar + Radar ─────────────────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.2s">
+        <div class="card-header"><i class="bi bi-bar-chart-grouped me-2"></i><strong>Analyser Comparison</strong></div>
+        <div class="card-body"><canvas id="barChart" style="height:260px;"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.25s">
+        <div class="card-header"><i class="bi bi-pentagon me-2"></i><strong>Score Radar</strong></div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <canvas id="radarChart" style="max-height:280px;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 4: Polarity Histogram + Word Freq ──────────────────────────── -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.3s">
+        <div class="card-header"><i class="bi bi-bar-chart me-2"></i><strong>Score Distribution Histogram</strong></div>
+        <div class="card-body text-center" id="histogramWrap">
+          <div class="skeleton-box" style="height:200px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.35s">
+        <div class="card-header"><i class="bi bi-cloud-fill me-2"></i><strong>Top Words</strong></div>
+        <div class="card-body"><canvas id="wordFreqChart" style="height:230px;"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 5: Summary Stats + Source ──────────────────────────────────── -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-7">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.4s">
+        <div class="card-header"><i class="bi bi-info-circle me-2"></i><strong>Summary Statistics</strong></div>
+        <div class="card-body">
+          <div class="summary-stat-list">
+            <div class="summary-stat-row"><span>Avg VADER Compound</span><span id="avgCompound" class="fw-semibold skeleton-text">—</span></div>
+            <div class="summary-stat-row"><span>Avg TextBlob Subjectivity</span><span id="avgSubjectivity" class="fw-semibold skeleton-text">—</span></div>
+            <div class="summary-stat-row"><span>Manual Analyses</span><span id="srcManual" class="fw-semibold skeleton-text">—</span></div>
+            <div class="summary-stat-row"><span>File Upload Analyses</span><span id="srcFile" class="fw-semibold skeleton-text">—</span></div>
+            <div class="summary-stat-row"><span>API Analyses</span><span id="srcApi" class="fw-semibold skeleton-text">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card chart-card h-100 slide-up" style="animation-delay:0.45s">
+        <div class="card-header"><i class="bi bi-pie-chart-fill me-2"></i><strong>Source Breakdown</strong></div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <canvas id="sourceChart" style="max-width:220px;max-height:220px;"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if not empty %}
+<script>
+// ── Chart.js global dark defaults ─────────────────────────────────────────────
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.color       = '#94a3b8';
+  Chart.defaults.borderColor = 'rgba(255,255,255,0.07)';
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+}
+
+const C = {
+  pos:'#2ecc71', posA:'rgba(46,204,113,0.2)',
+  neg:'#e74c3c', negA:'rgba(231,76,60,0.2)',
+  neu:'#f39c12', neuA:'rgba(243,156,18,0.2)',
+  mixed:'#9b59b6', mixedA:'rgba(155,89,182,0.2)',
+  blue:'#3498db', blueA:'rgba(52,152,219,0.15)',
+  purple:'#9b59b6',
+};
+
+let trendChart, barChart, radarChart, pieChart, sourceChart, wordChart;
+let dashData = {}, filterFrom = null, filterTo = null;
+
+// ── Fetch data ────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const status = document.getElementById('dashboardStatus');
+  try {
+    let url = '{{ url_for("main.api_dashboard") }}';
+    const params = new URLSearchParams();
+    if (filterFrom) params.set('from', filterFrom);
+    if (filterTo)   params.set('to',   filterTo);
+    if (params.toString()) url += '?' + params.toString();
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Dashboard data request failed (${res.status}).`);
+    dashData = await res.json();
+    if (dashData.empty) return;
+
+    // Keep the page usable while an older Flask process is still serving the
+    // previous three-sentiment API response.
+    dashData.sentiment_distribution.counts[3] ??= {{ mixed_count }};
+    dashData.trend.mixed ??= dashData.trend.dates.map(() => 0);
+
+    updateKPIs(dashData);
+    updateStats(dashData);
+    if (typeof Chart !== 'undefined') {
+      renderPie(dashData.sentiment_distribution);
+      renderTrend(dashData.trend, 'all');
+      renderBar(dashData.analyzer_comparison);
+      renderRadar(dashData);
+      renderWordFreq(dashData.word_frequencies);
+      renderSource(dashData.source_breakdown);
+    } else {
+      status.textContent = 'Counts loaded, but charts could not render because the chart library is unavailable.';
+      status.classList.remove('d-none');
+    }
+    renderHistogram(dashData.histogram_b64);
+    removeSkeleton();
+  } catch (error) {
+    status.textContent = `Could not load dashboard data: ${error.message}`;
+    status.classList.remove('d-none');
+    removeSkeleton();
+  }
+}
+
+function removeSkeleton() {
+  document.querySelectorAll('.skeleton-text').forEach(el => el.classList.remove('skeleton-text'));
+  document.querySelectorAll('.skeleton-box').forEach(el => el.classList.remove('skeleton-box'));
+}
+
+// ── KPIs ──────────────────────────────────────────────────────────────────────
+function updateKPIs(d) {
+  const dist = d.sentiment_distribution;
+  document.getElementById('kpiTotal').textContent     = d.total;
+  document.getElementById('pieCenterVal').textContent  = d.total;
+  document.getElementById('kpiPositive').textContent  = dist.counts[0];
+  document.getElementById('kpiNegative').textContent  = dist.counts[1];
+  document.getElementById('kpiNeutral').textContent   = dist.counts[2];
+  document.getElementById('kpiMixed').textContent     = dist.counts[3] ?? {{ mixed_count }};
+}
+
+// ── Pie ───────────────────────────────────────────────────────────────────────
+function renderPie(dist) {
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Positive','Negative','Neutral','Mixed'],
+      datasets: [{ data: dist.counts, backgroundColor:[C.pos,C.neg,C.neu,C.mixed], borderWidth:3, borderColor:'rgba(255,255,255,0.05)' }]
+    },
+    options: {
+      cutout:'65%',
+      plugins: {
+        legend: { position:'bottom', labels:{ padding:14, font:{size:12}, color:'#94a3b8' }},
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} (${((ctx.raw/dashData.total)*100).toFixed(1)}%)` }}
+      }
+    }
+  });
+}
+
+// ── Trend ─────────────────────────────────────────────────────────────────────
+function renderTrend(trend, mode) {
+  if (trendChart) trendChart.destroy();
+  const singleDay = trend.dates.length === 1;
+  document.getElementById('trendSingleDayNotice').classList.toggle('d-none', !singleDay);
+  const datasets = [];
+  const series = [
+    { key:'positive', label:'Positive', color:C.pos, area:C.posA },
+    { key:'negative', label:'Negative', color:C.neg, area:C.negA },
+    { key:'neutral', label:'Neutral', color:C.neu, area:C.neuA },
+    { key:'mixed', label:'Mixed', color:C.mixed, area:C.mixedA },
+  ];
+  series.filter(item => mode === 'all' || mode === item.key).forEach(item => {
+    datasets.push(singleDay
+      ? {
+          label:item.label,
+          data:[trend[item.key][0]],
+          backgroundColor:item.color,
+          borderColor:item.color,
+          borderRadius:5,
+          maxBarThickness:56,
+        }
+      : {
+          label:item.label,
+          data:trend[item.key],
+          borderColor:item.color,
+          backgroundColor:item.area,
+          fill:true,
+          tension:0.4,
+          pointRadius:3,
+          pointHoverRadius:6,
+        });
+  });
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type:singleDay ? 'bar' : 'line',
+    data:{ labels:trend.dates, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top', labels:{ color:'#94a3b8', font:{size:12} }}},
+      scales:{
+        y:{ beginAtZero:true, ticks:{color:'#64748b'}, grid:{color:'rgba(255,255,255,0.05)'} },
+        x:{ ticks:{color:'#64748b'}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+document.getElementById('trendToggle').querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#trendToggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTrend(dashData.trend, btn.dataset.mode);
+  });
+});
+
+// ── Bar ───────────────────────────────────────────────────────────────────────
+function renderBar(cmp) {
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('barChart'), {
+    type:'bar',
+    data:{
+      labels:cmp.analyzers,
+      datasets:[
+        { label:'Positive', data:cmp.positive, backgroundColor:C.pos, borderRadius:5 },
+        { label:'Negative', data:cmp.negative, backgroundColor:C.neg, borderRadius:5 },
+        { label:'Neutral',  data:cmp.neutral,  backgroundColor:C.neu, borderRadius:5 },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'top', labels:{ color:'#94a3b8', font:{size:12} }}},
+      scales:{
+        y:{ beginAtZero:true, ticks:{color:'#64748b'}, grid:{color:'rgba(255,255,255,0.05)'} },
+        x:{ ticks:{color:'#94a3b8'}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+// ── Radar ─────────────────────────────────────────────────────────────────────
+function renderRadar(d) {
+  if (radarChart) radarChart.destroy();
+  const dist = d.sentiment_distribution, total = d.total||1;
+  radarChart = new Chart(document.getElementById('radarChart'), {
+    type:'radar',
+    data:{
+      labels:['Positive %','Negative %','Neutral %','Compound×100','Subjectivity×100'],
+      datasets:[{
+        label:'Sentiment Profile',
+        data:[
+          +(dist.counts[0]/total*100).toFixed(1),
+          +(dist.counts[1]/total*100).toFixed(1),
+          +(dist.counts[2]/total*100).toFixed(1),
+          +Math.abs(d.avg_compound*100).toFixed(1),
+          +(d.avg_subjectivity*100).toFixed(1),
+        ],
+        backgroundColor:C.blueA, borderColor:C.blue, borderWidth:2, pointBackgroundColor:C.blue,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{ legend:{ display:false }},
+      scales:{ r:{ beginAtZero:true, max:100, ticks:{stepSize:20, color:'#64748b', font:{size:9}}, grid:{color:'rgba(255,255,255,0.07)'}, pointLabels:{color:'#94a3b8', font:{size:10}} }}
+    }
+  });
+}
+
+// ── Word Frequency ────────────────────────────────────────────────────────────
+function renderWordFreq(freqs) {
+  if (wordChart) wordChart.destroy();
+  const sorted = Object.entries(freqs).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const colors = sorted.map((_,i)=>`hsl(${200+i*7},65%,55%)`);
+  wordChart = new Chart(document.getElementById('wordFreqChart'), {
+    type:'bar',
+    data:{ labels:sorted.map(e=>e[0]), datasets:[{ label:'Frequency', data:sorted.map(e=>e[1]), backgroundColor:colors, borderRadius:4 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}},
+      scales:{
+        x:{ beginAtZero:true, ticks:{color:'#64748b'}, grid:{color:'rgba(255,255,255,0.05)'} },
+        y:{ ticks:{color:'#94a3b8', font:{size:11}}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+// ── Polarity Histogram (server-rendered PNG) ──────────────────────────────────
+function renderHistogram(b64) {
+  const wrap = document.getElementById('histogramWrap');
+  if (b64) {
+    wrap.innerHTML = `<img src="data:image/png;base64,${b64}" class="img-fluid rounded-3" alt="Histogram" style="max-height:230px"/>`;
+  } else {
+    wrap.innerHTML = '<p class="text-muted small text-center pt-5">No data</p>';
+  }
+}
+
+// ── Source Doughnut ───────────────────────────────────────────────────────────
+function renderSource(src) {
+  if (sourceChart) sourceChart.destroy();
+  const labels = [], data = [], colors = [];
+  if (src.manual) { labels.push('Manual'); data.push(src.manual); colors.push(C.blue); }
+  if (src.file)   { labels.push('File Upload'); data.push(src.file); colors.push(C.purple); }
+  if (src.api)    { labels.push('API'); data.push(src.api); colors.push('#1abc9c'); }
+  sourceChart = new Chart(document.getElementById('sourceChart'), {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderWidth:3, borderColor:'rgba(255,255,255,0.05)' }] },
+    options:{ cutout:'60%', plugins:{ legend:{ position:'bottom', labels:{ color:'#94a3b8', font:{size:11}, padding:12 }}}}
+  });
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats(d) {
+  const v = parseFloat(d.avg_compound);
+  const el = document.getElementById('avgCompound');
+  el.textContent  = d.avg_compound;
+  el.className    = 'fw-semibold '+(v>=0.05?'text-success':v<=-0.05?'text-danger':'text-warning');
+  document.getElementById('avgSubjectivity').textContent = d.avg_subjectivity;
+  document.getElementById('srcManual').textContent = d.source_breakdown.manual;
+  document.getElementById('srcFile').textContent   = d.source_breakdown.file;
+  document.getElementById('srcApi').textContent    = d.source_breakdown.api || 0;
+}
+
+// ── Date filter ───────────────────────────────────────────────────────────────
+document.getElementById('applyDateBtn').addEventListener('click', () => {
+  filterFrom = document.getElementById('dateFrom').value || null;
+  filterTo   = document.getElementById('dateTo').value   || null;
+  loadDashboard();
+});
+
+document.getElementById('clearDateBtn').addEventListener('click', () => {
+  filterFrom = filterTo = null;
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value   = '';
+  loadDashboard();
+});
+
+document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadDashboard();
+</script>
+{% endif %}
+{% endblock %}

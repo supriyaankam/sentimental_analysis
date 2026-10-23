@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Batch Result — {{ batch.filename }} — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-5 fade-in">
+
+  <nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('main.history') }}">History</a></li>
+      <li class="breadcrumb-item active">Batch #{{ batch.id }}</li>
+    </ol>
+  </nav>
+
+  <!-- ── Summary Banner ────────────────────────────────────────────────────── -->
+  <div class="batch-banner mb-4 slide-up">
+    <div class="row align-items-center g-3">
+      <div class="col-auto">
+        <div class="batch-file-icon">
+          {% set ft = batch.file_type %}
+          <i class="bi bi-filetype-{{ ft if ft in ['pdf','csv','json','docx'] else 'file' }}"></i>
+        </div>
+      </div>
+      <div class="col">
+        <h4 class="mb-1">{{ batch.filename }}</h4>
+        <div class="text-muted small">
+          Analysed {{ batch.created_at.strftime('%Y-%m-%d at %H:%M') }} &middot;
+          {{ batch.file_type.upper() }} &middot;
+          <strong>{{ batch.total_records | int }}</strong> records stored
+        </div>
+      </div>
+      <div class="col-auto d-flex gap-2 flex-wrap">
+        <div class="dropdown">
+          <button class="btn btn-sm btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i>Export
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <a class="dropdown-item" target="_blank" rel="noopener"
+                 href="{{ url_for('main.batch_pdf_report', batch_id=batch.id) }}">
+                <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Open PDF Report
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item"
+                 href="{{ url_for('main.batch_pdf_report', batch_id=batch.id, download=1) }}">
+                <i class="bi bi-download me-2 text-danger"></i>Download PDF Report
+              </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item" href="{{ url_for('main.batch_export', batch_id=batch.id) }}">
+                <i class="bi bi-filetype-csv me-2 text-success"></i>Export Full Data as CSV
+              </a>
+            </li>
+          </ul>
+        </div>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-speedometer2 me-1"></i>Dashboard
+        </a>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+      {% set total = batch.total_records or 1 %}
+      <div class="col-md-4">
+        <div class="batch-stat-card positive">
+          <div class="batch-stat-num">{{ batch.positive_count }}</div>
+          <div class="batch-stat-lbl"><i class="bi bi-emoji-smile me-1"></i>Positive</div>
+          <div class="batch-stat-pct">{{ '%.1f'|format(batch.positive_count / total * 100) }}%</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="batch-stat-card negative">
+          <div class="batch-stat-num">{{ batch.negative_count }}</div>
+          <div class="batch-stat-lbl"><i class="bi bi-emoji-frown me-1"></i>Negative</div>
+          <div class="batch-stat-pct">{{ '%.1f'|format(batch.negative_count / total * 100) }}%</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="batch-stat-card neutral">
+          <div class="batch-stat-num">{{ batch.neutral_count }}</div>
+          <div class="batch-stat-lbl"><i class="bi bi-emoji-neutral me-1"></i>Neutral</div>
+          <div class="batch-stat-pct">{{ '%.1f'|format(batch.neutral_count / total * 100) }}%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Pie Chart -->
+    <div class="col-md-5 slide-up" style="animation-delay:.08s">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-pie-chart me-2"></i><strong>Sentiment Distribution</strong></div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <canvas id="batchPie" style="max-width:260px;max-height:260px;"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Word Cloud -->
+    {% if wordcloud %}
+    <div class="col-md-7 slide-up" style="animation-delay:.12s">
+      <div class="card score-card h-100">
+        <div class="card-header"><i class="bi bi-cloud me-2"></i><strong>Top Keywords</strong></div>
+        <div class="card-body d-flex align-items-center justify-content-center p-2">
+          <img src="data:image/png;base64,{{ wordcloud }}" class="img-fluid rounded-3 wordcloud-img" alt="Word Cloud"/>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Results Table (paginated) -->
+    <div class="col-12 slide-up" style="animation-delay:.16s">
+      <div class="card score-card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span>
+            <i class="bi bi-table me-2"></i>
+            <strong>Results</strong>
+            <span class="badge bg-primary ms-1">{{ batch.total_records | int }}</span>
+            <span class="text-muted small ms-2">
+              — page {{ results_page.page }} of {{ results_page.pages }}
+            </span>
+          </span>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="text" class="form-control form-control-sm dark-input"
+                   id="tableSearch" placeholder="Filter this page…" style="width:180px"/>
+          </div>
+        </div>
+
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" id="resultsTable">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Text Preview</th>
+                  <th>Final</th>
+                  <th>VADER</th>
+                  <th>TextBlob</th>
+                  <th>Compound</th>
+                  <th>Words</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set offset = (results_page.page - 1) * results_page.per_page %}
+                {% for r in results_page.items %}
+                <tr>
+                  <td class="text-muted small">{{ offset + loop.index }}</td>
+                  <td style="max-width:260px">
+                    <div class="text-truncate small" title="{{ r.input_text }}">
+                      {{ r.input_text[:100] }}{% if r.input_text|length > 100 %}…{% endif %}
+                    </div>
+                  </td>
+                  <td><span class="sentiment-badge badge-{{ r.final_sentiment }}">{{ r.final_sentiment|capitalize }}</span></td>
+                  <td><span class="badge badge-sm badge-{{ r.vader_sentiment }}">{{ r.vader_sentiment|capitalize }}</span></td>
+                  <td><span class="badge badge-sm badge-{{ r.textblob_sentiment }}">{{ r.textblob_sentiment|capitalize }}</span></td>
+                  <td>
+                    <span class="{% if (r.vader_compound or 0)>=0.05 %}text-success{% elif (r.vader_compound or 0)<=-0.05 %}text-danger{% else %}text-warning{% endif %} fw-semibold small">
+                      {{ '%.3f'|format(r.vader_compound or 0) }}
+                    </span>
+                  </td>
+                  <td class="small text-muted">{{ r.word_count }}</td>
+                  <td>
+                    <a href="{{ url_for('main.result', result_id=r.id) }}"
+                       class="btn btn-sm btn-outline-primary py-0 px-2">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if results_page.pages > 1 %}
+        <div class="card-footer">
+          <nav>
+            <ul class="pagination pagination-sm mb-0 justify-content-center">
+              {% if results_page.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('main.batch_result', batch_id=batch.id, page=results_page.prev_num) }}">
+                  <i class="bi bi-chevron-left"></i>
+                </a>
+              </li>
+              {% endif %}
+              {% for p in results_page.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if p %}
+                <li class="page-item {% if p == results_page.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('main.batch_result', batch_id=batch.id, page=p) }}">{{ p }}</a>
+                </li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+              {% endfor %}
+              {% if results_page.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('main.batch_result', batch_id=batch.id, page=results_page.next_num) }}">
+                  <i class="bi bi-chevron-right"></i>
+                </a>
+              </li>
+              {% endif %}
+            </ul>
+          </nav>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+Chart.defaults.color = '#94a3b8';
+const ctx = document.getElementById('batchPie').getContext('2d');
+new Chart(ctx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Positive','Negative','Neutral'],
+    datasets: [{
+      data: [{{ batch.positive_count }}, {{ batch.negative_count }}, {{ batch.neutral_count }}],
+      backgroundColor: ['#2ecc71','#e74c3c','#f39c12'],
+      borderWidth: 3,
+      borderColor: 'rgba(255,255,255,0.05)',
+    }]
+  },
+  options: {
+    cutout: '65%',
+    plugins: {
+      legend: { position:'bottom', labels:{ padding:14, font:{size:12}, color:'#94a3b8' } }
+    }
+  }
+});
+
+// Filter current page rows
+document.getElementById('tableSearch').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#resultsTable tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+</script>
+{% endblock %}

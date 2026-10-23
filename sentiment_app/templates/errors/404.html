@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}404 — Page Not Found — SentimentIQ{% endblock %}
+{% block content %}
+<div class="error-page fade-in">
+  <div class="error-code">404</div>
+  <div class="error-icon"><i class="bi bi-compass"></i></div>
+  <h2 class="error-title">Page Not Found</h2>
+  <p class="error-desc text-muted">The page you're looking for doesn't exist or has been moved.</p>
+  <div class="d-flex gap-3 justify-content-center mt-4">
+    <a href="{{ url_for('main.index') }}"     class="btn btn-analyze"><i class="bi bi-house me-2"></i>Go Home</a>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-primary"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
+  </div>
+</div>
+{% endblock %}

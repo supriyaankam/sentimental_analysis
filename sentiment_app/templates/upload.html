@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Upload Document — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-5 fade-in">
+
+  <div class="page-header mb-5">
+    <div>
+      <h2 class="page-title"><i class="bi bi-cloud-upload me-2 text-primary"></i>Upload Document</h2>
+      <p class="text-muted mt-1 mb-0">
+        Upload any supported file and the system will extract, analyse, and store every text block.
+      </p>
+    </div>
+    <!-- Limits banner -->
+    <div class="limits-banner">
+      <div class="limit-chip"><i class="bi bi-file-earmark-zip text-primary"></i> Max file: <strong>{{ max_mb }} MB</strong></div>
+      <div class="limit-chip"><i class="bi bi-list-ol text-success"></i> Max rows: <strong>{{ "{:,}".format(max_rows) }}</strong></div>
+      <div class="limit-chip"><i class="bi bi-fonts text-warning"></i> Max chars/block: <strong>10,000</strong></div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Upload Form -->
+    <div class="col-lg-7">
+      <div class="card analysis-card">
+        <div class="card-header">
+          <i class="bi bi-file-earmark-arrow-up me-2"></i><strong>Select File</strong>
+        </div>
+        <div class="card-body">
+          <form action="{{ url_for('main.upload') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="dropZone">
+              <div class="drop-icon"><i class="bi bi-cloud-arrow-up-fill"></i></div>
+              <div class="drop-title">Drag &amp; drop your file here</div>
+              <div class="drop-sub text-muted">or click to browse</div>
+              <div class="drop-limit-hint text-muted small mt-2">
+                <i class="bi bi-info-circle me-1"></i>Max {{ max_mb }} MB &middot; {{ "{:,}".format(max_rows) }} rows max
+              </div>
+              <input type="file" class="drop-input" name="file" id="fileInput"
+                     accept=".txt,.pdf,.docx,.csv,.json,.xlsx,.xls" required/>
+            </div>
+
+            <!-- File Preview -->
+            <div id="filePreview" class="file-preview d-none mt-3">
+              <div class="d-flex align-items-center gap-3">
+                <div class="file-icon" id="fileTypeIcon"><i class="bi bi-file-earmark"></i></div>
+                <div class="flex-grow-1">
+                  <div class="fw-semibold" id="fileName">—</div>
+                  <div class="text-muted small" id="fileSize">—</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="clearFile">
+                  <i class="bi bi-x-circle"></i>
+                </button>
+              </div>
+              <!-- Size warning bar -->
+              <div class="mt-2">
+                <div class="size-bar-track">
+                  <div class="size-bar-fill" id="sizeFill" style="width:0%"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-1">
+                  <small id="sizeLabel" class="text-muted">0 KB of {{ max_mb * 1024 }} KB limit</small>
+                  <small id="sizeWarning" class="text-warning d-none fw-semibold">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Large file — processing may take a moment
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Over-size alert -->
+            <div id="overSizeAlert" class="alert alert-danger py-2 px-3 mt-3 d-none">
+              <i class="bi bi-x-circle me-2"></i>
+              File exceeds the {{ max_mb }} MB limit. Please choose a smaller file.
+            </div>
+
+            <!-- Row cap info -->
+            <div class="alert alert-info py-2 px-3 mt-3 mb-0" style="font-size:0.82rem;">
+              <i class="bi bi-info-circle me-2"></i>
+              For CSV/Excel files with more than <strong>{{ "{:,}".format(max_rows) }} rows</strong>,
+              only the first {{ "{:,}".format(max_rows) }} will be analysed.
+              Text blocks longer than 10,000 characters are automatically trimmed.
+            </div>
+
+            <!-- Format grid -->
+            <div class="format-grid mt-4">
+              {% set formats = [
+                ('filetype-pdf',  'PDF',      'danger',   'All pages extracted'),
+                ('filetype-docx', 'DOCX',     'primary',  'Paragraphs + tables'),
+                ('filetype-csv',  'CSV',      'success',  'Up to 5,000 rows'),
+                ('filetype-json', 'JSON',     'warning',  'Up to 5,000 strings'),
+                ('file-text',     'XLSX/XLS', 'success',  'Up to 5,000 rows'),
+                ('file-text',     'TXT',      'secondary','Up to 2,000 paragraphs'),
+              ] %}
+              {% for icon, label, color, desc in formats %}
+              <div class="format-item">
+                <i class="bi bi-{{ icon }} text-{{ color }}"></i>
+                <div>
+                  <div class="fw-semibold small">{{ label }}</div>
+                  <div class="text-muted" style="font-size:0.75rem">{{ desc }}</div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <!-- Submit -->
+            <div class="mt-4">
+              <button type="submit" class="btn btn-analyze w-100" id="uploadBtn">
+                <i class="bi bi-cpu me-2"></i>Analyse Document
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="col-lg-5 d-flex flex-column gap-4">
+
+      <!-- Processing steps -->
+      <div class="card analysis-card">
+        <div class="card-header"><i class="bi bi-info-circle me-2"></i><strong>What Happens?</strong></div>
+        <div class="card-body">
+          <div class="pipeline-steps">
+            {% set steps = [
+              ('1','bi-upload','primary','File Upload','Original file stored in your account database.'),
+              ('2','bi-scissors','info','Text Extraction','Text extracted per page / row / paragraph.'),
+              ('3','bi-cpu','warning','NLP Analysis','VADER and TextBlob sentiment analysis per text.'),
+              ('4','bi-database','success','Batch Stored','Results committed in batches of 100 rows.'),
+              ('5','bi-bar-chart','purple','Dashboard','Trends and charts available instantly.'),
+            ] %}
+            {% for num, icon, color, title, desc in steps %}
+            <div class="pipeline-step">
+              <div class="step-num bg-{{ color }} text-white">{{ num }}</div>
+              <div class="step-content">
+                <div class="step-title"><i class="bi {{ icon }} text-{{ color }} me-1"></i>{{ title }}</div>
+                <div class="step-desc text-muted">{{ desc }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Tips -->
+      <div class="card analysis-card">
+        <div class="card-header"><i class="bi bi-lightning me-2"></i><strong>Tips for Best Results</strong></div>
+        <div class="card-body">
+          <ul class="tips-list">
+            <li><i class="bi bi-check-circle text-success"></i>
+              CSV/Excel: name a column <code>text</code>, <code>review</code>, or <code>comment</code> for auto-detection.
+            </li>
+            <li><i class="bi bi-check-circle text-success"></i>
+              JSON: use keys like <code>"text"</code> or <code>"review"</code>.
+            </li>
+            <li><i class="bi bi-check-circle text-success"></i>
+              PDF works best with text-based (not scanned) files.
+            </li>
+            <li><i class="bi bi-info-circle text-info"></i>
+              Large files (&gt;1,000 rows) may take 30–60 seconds to process.
+            </li>
+            <li><i class="bi bi-info-circle text-info"></i>
+              Very large files are capped at <strong>{{ "{:,}".format(max_rows) }} rows</strong> automatically.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MAX_BYTES    = {{ max_mb * 1024 * 1024 }};
+const MAX_MB       = {{ max_mb }};
+const dropZone     = document.getElementById('dropZone');
+const fileInput    = document.getElementById('fileInput');
+const filePreview  = document.getElementById('filePreview');
+const fileNameEl   = document.getElementById('fileName');
+const fileSizeEl   = document.getElementById('fileSize');
+const fileIconEl   = document.getElementById('fileTypeIcon');
+const clearBtn     = document.getElementById('clearFile');
+const uploadBtn    = document.getElementById('uploadBtn');
+const sizeFill     = document.getElementById('sizeFill');
+const sizeLabel    = document.getElementById('sizeLabel');
+const sizeWarning  = document.getElementById('sizeWarning');
+const overSizeAlert= document.getElementById('overSizeAlert');
+
+const iconMap = {
+  pdf: 'bi-filetype-pdf text-danger',
+  docx:'bi-filetype-docx text-primary',
+  csv: 'bi-filetype-csv text-success',
+  json:'bi-filetype-json text-warning',
+  xlsx:'bi-file-spreadsheet text-success',
+  xls: 'bi-file-spreadsheet text-success',
+  txt: 'bi-file-text text-secondary',
+};
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    showPreview(e.dataTransfer.files[0]);
+  }
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) showPreview(fileInput.files[0]);
+});
+
+function formatBytes(bytes) {
+  if (bytes < 1024)        return bytes + ' B';
+  if (bytes < 1024*1024)   return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(2) + ' MB';
+}
+
+function showPreview(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  fileIconEl.innerHTML = `<i class="bi ${iconMap[ext] || 'bi-file-earmark text-secondary'}"></i>`;
+  fileNameEl.textContent = file.name;
+  fileSizeEl.textContent = formatBytes(file.size);
+  filePreview.classList.remove('d-none');
+  dropZone.classList.add('has-file');
+
+  // Size bar
+  const pct   = Math.min(file.size / MAX_BYTES * 100, 100);
+  const maxKB = (MAX_BYTES / 1024).toFixed(0);
+  sizeFill.style.width = pct + '%';
+  sizeFill.className   = 'size-bar-fill';
+  sizeLabel.textContent = `${formatBytes(file.size)} of ${MAX_MB} MB limit`;
+
+  const isLarge   = file.size > MAX_BYTES * 0.5;   // warn at 50%
+  const isOverMax = file.size > MAX_BYTES;
+
+  if (isOverMax) {
+    sizeFill.classList.add('fill-over');
+    overSizeAlert.classList.remove('d-none');
+    sizeWarning.classList.add('d-none');
+    uploadBtn.disabled = true;
+  } else if (isLarge) {
+    sizeFill.classList.add('fill-warn');
+    sizeWarning.classList.remove('d-none');
+    overSizeAlert.classList.add('d-none');
+    uploadBtn.disabled = false;
+  } else {
+    sizeFill.classList.add('fill-ok');
+    sizeWarning.classList.add('d-none');
+    overSizeAlert.classList.add('d-none');
+    uploadBtn.disabled = false;
+  }
+}
+
+clearBtn.addEventListener('click', () => {
+  fileInput.value = '';
+  filePreview.classList.add('d-none');
+  dropZone.classList.remove('has-file');
+  overSizeAlert.classList.add('d-none');
+  sizeWarning.classList.add('d-none');
+  uploadBtn.disabled = false;
+});
+
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+  if (uploadBtn.disabled) { e.preventDefault(); return; }
+  uploadBtn.innerHTML = `
+    <span class="spinner-border spinner-border-sm me-2"></span>
+    Processing… this may take a moment for large files
+  `;
+  uploadBtn.disabled = true;
+});
+</script>
+{% endblock %}

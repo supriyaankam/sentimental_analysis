@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-app-shell="{{ app_shell_version }}">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="SentimentIQ — NLP sentiment analysis with VADER, TextBlob, and Naive Bayes."/>
+  <title>{% block title %}SentimentIQ — NLP Analysis{% endblock %}</title>
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>"/>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+  <!-- Core styles -->
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet"/>
+  <!-- Theme overrides (must come AFTER style.css) -->
+  <link href="{{ url_for('static', filename='css/themes.css') }}" rel="stylesheet"/>
+
+  <!-- Apply saved theme & font size instantly (before render, no flash) -->
+  <script>
+    (function() {
+      var t = localStorage.getItem('siq-theme') || 'dark';
+      var f = localStorage.getItem('siq-fontsize') || 'md';
+      document.documentElement.setAttribute('data-theme', t);
+      document.documentElement.setAttribute('data-fontsize', f);
+      var sizes = { sm: '14px', md: '16px', lg: '18px' };
+      document.documentElement.style.fontSize = sizes[f] || '16px';
+    })();
+  </script>
+
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- ── Theme Picker Overlay (closes panel on outside click) ──────────────── -->
+<div class="theme-overlay" id="themeOverlay"></div>
+
+<!-- ── Theme Picker Panel ───────────────────────────────────────────────── -->
+<div class="theme-panel" id="themePanel" role="dialog" aria-label="Choose theme">
+  <div class="theme-panel-title"><i class="bi bi-palette me-1"></i>Appearance</div>
+
+  <div class="theme-grid" role="group" aria-label="Theme selection">
+
+    <button class="theme-swatch" data-theme="dark" title="Dark" aria-pressed="false">
+      <div class="swatch-circle swatch-dark"></div>
+      <span class="swatch-label">Dark</span>
+    </button>
+
+    <button class="theme-swatch" data-theme="light" title="Light" aria-pressed="false">
+      <div class="swatch-circle swatch-light"></div>
+      <span class="swatch-label">Light</span>
+    </button>
+
+    <button class="theme-swatch" data-theme="ocean" title="Ocean" aria-pressed="false">
+      <div class="swatch-circle swatch-ocean"></div>
+      <span class="swatch-label">Ocean</span>
+    </button>
+
+    <button class="theme-swatch" data-theme="sunset" title="Sunset" aria-pressed="false">
+      <div class="swatch-circle swatch-sunset"></div>
+      <span class="swatch-label">Sunset</span>
+    </button>
+
+    <button class="theme-swatch" data-theme="forest" title="Forest" aria-pressed="false">
+      <div class="swatch-circle swatch-forest"></div>
+      <span class="swatch-label">Forest</span>
+    </button>
+
+  </div>
+
+  <!-- Font size row -->
+  <div class="theme-font-row">
+    <span class="theme-font-label"><i class="bi bi-type me-1"></i>Text Size</span>
+    <div class="font-size-btns" role="group" aria-label="Text size">
+      <button class="font-size-btn" data-size="sm" title="Small text">A</button>
+      <button class="font-size-btn active" data-size="md" title="Medium text" style="font-size:0.85rem">A</button>
+      <button class="font-size-btn" data-size="lg" title="Large text" style="font-size:1rem">A</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Navbar ────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-lg navbar-dark fixed-top" id="mainNav">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
+      <div class="brand-icon"><i class="bi bi-graph-up-arrow"></i></div>
+      <span class="brand-text">SentimentIQ</span>
+    </a>
+
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-1">
+        {% if current_user %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
+            <i class="bi bi-house me-1"></i>Home
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'main.upload' %}active{% endif %}" href="{{ url_for('main.upload') }}">
+            <i class="bi bi-cloud-upload me-1"></i>Upload
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'main.history' %}active{% endif %}" href="{{ url_for('main.history') }}">
+            <i class="bi bi-clock-history me-1"></i>History
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}" href="{{ url_for('main.dashboard') }}">
+            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'main.about' %}active{% endif %}" href="{{ url_for('main.about') }}">
+            <i class="bi bi-info-circle me-1"></i>About
+          </a>
+        </li>
+        <li class="nav-item ms-lg-2">
+          <div class="dropdown">
+            <button class="btn btn-outline-light btn-sm dropdown-toggle navbar-action-btn" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-download me-1"></i>Export
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{{ url_for('main.export_data', fmt='csv') }}">
+                <i class="bi bi-filetype-csv me-2 text-success"></i>Export CSV
+              </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('main.export_data', fmt='json') }}">
+                <i class="bi bi-filetype-json me-2 text-warning"></i>Export JSON
+              </a></li>
+            </ul>
+          </div>
+        </li>
+        <li class="nav-item ms-lg-2">
+          <span class="navbar-text account-name small me-2">{{ current_user.username }}</span>
+          <form action="{{ url_for('auth.logout') }}" method="POST" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-outline-light btn-sm navbar-action-btn">
+              <i class="bi bi-box-arrow-right me-1"></i>Logout
+            </button>
+          </form>
+        </li>
+        {% else %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('auth.login') }}">Log in</a>
+        </li>
+        <li class="nav-item">
+          <a class="btn btn-primary btn-sm ms-lg-2" href="{{ url_for('auth.register') }}">Create account</a>
+        </li>
+        {% endif %}
+
+        <!-- ── Theme Toggle Button ─────────────────────────────────── -->
+        <li class="nav-item ms-lg-1">
+          <button class="theme-btn" id="themeToggleBtn" title="Change theme"
+                  aria-label="Change theme" aria-expanded="false" aria-controls="themePanel">
+            <i class="bi bi-palette" id="themeBtnIcon"></i>
+          </button>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Flash Messages ───────────────────────────────────────────────────────── -->
+<div class="flash-container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category=='danger' else ('success' if category=='success' else ('warning' if category=='warning' else 'info')) }} alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-{% if category=='success' %}check-circle{% elif category=='danger' %}exclamation-triangle{% elif category=='warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+</div>
+
+<!-- ── Main Content ─────────────────────────────────────────────────────────── -->
+<main class="main-content">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- ── Footer ──────────────────────────────────────────────────────────────── -->
+<footer class="site-footer">
+  <div class="container-fluid px-4">
+    <div class="row align-items-center">
+      <div class="col-md-5">
+        <span class="text-muted small">
+          <i class="bi bi-graph-up-arrow me-1 text-primary"></i>
+          <strong>SentimentIQ</strong> &mdash; NLP Sentiment Analysis System
+        </span>
+      </div>
+      <div class="col-md-4 text-md-center">
+        <span class="text-muted small">
+          NLTK &middot; VADER &middot; TextBlob &middot; NRCLex
+        </span>
+      </div>
+      <div class="col-md-3 text-md-end d-flex align-items-center justify-content-md-end gap-3">
+        {% if current_user %}
+        <a href="{{ url_for('main.about') }}"     class="text-muted small text-decoration-none">About</a>
+        <a href="{{ url_for('main.dashboard') }}" class="text-muted small text-decoration-none">Dashboard</a>
+        {% else %}
+        <a href="{{ url_for('auth.login') }}" class="text-muted small text-decoration-none">Log in</a>
+        <a href="{{ url_for('auth.register') }}" class="text-muted small text-decoration-none">Create account</a>
+        {% endif %}
+        <!-- Compact theme pill in footer too -->
+        <span class="theme-footer-pill" id="footerThemeLabel" title="Click navbar palette to change theme">
+          <i class="bi bi-circle-half me-1"></i><span id="footerThemeName">Dark</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<!-- ── Theme Switcher JS ───────────────────────────────────────────────────── -->
+<script>
+(function() {
+  // ── Config ──────────────────────────────────────────────────────────────────
+  const THEMES = {
+    dark:   { label: 'Dark',   icon: 'bi-moon-stars-fill' },
+    light:  { label: 'Light',  icon: 'bi-sun-fill' },
+    ocean:  { label: 'Ocean',  icon: 'bi-water' },
+    sunset: { label: 'Sunset', icon: 'bi-sunset-fill' },
+    forest: { label: 'Forest', icon: 'bi-tree-fill' },
+  };
+  const FONT_SIZES = { sm: '14px', md: '16px', lg: '18px' };
+
+  // ── State ────────────────────────────────────────────────────────────────────
+  let currentTheme    = localStorage.getItem('siq-theme')    || 'dark';
+  let currentFontSize = localStorage.getItem('siq-fontsize') || 'md';
+
+  // ── Elements ─────────────────────────────────────────────────────────────────
+  const html        = document.documentElement;
+  const panel       = document.getElementById('themePanel');
+  const overlay     = document.getElementById('themeOverlay');
+  const toggleBtn   = document.getElementById('themeToggleBtn');
+  const btnIcon     = document.getElementById('themeBtnIcon');
+  const footerName  = document.getElementById('footerThemeName');
+  const swatches    = document.querySelectorAll('.theme-swatch');
+  const fontBtns    = document.querySelectorAll('.font-size-btn');
+
+  // ── Apply theme ───────────────────────────────────────────────────────────────
+  function applyTheme(theme) {
+    if (!THEMES[theme]) return;
+    currentTheme = theme;
+    html.setAttribute('data-theme', theme);
+    localStorage.setItem('siq-theme', theme);
+
+    // Update icon in navbar button
+    const iconClass = THEMES[theme].icon;
+    btnIcon.className = `bi ${iconClass}`;
+
+    // Update footer label
+    if (footerName) footerName.textContent = THEMES[theme].label;
+
+    // Mark active swatch
+    swatches.forEach(s => {
+      const isActive = s.dataset.theme === theme;
+      s.classList.toggle('active', isActive);
+      s.setAttribute('aria-pressed', String(isActive));
+    });
+
+    // Update Chart.js global defaults for current theme
+    if (window.Chart) {
+      const lightTheme  = theme === 'light';
+      const textColor   = lightTheme ? '#475569' : '#94a3b8';
+      const borderColor = lightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.07)';
+      Chart.defaults.color       = textColor;
+      Chart.defaults.borderColor = borderColor;
+    }
+  }
+
+  // ── Apply font size ───────────────────────────────────────────────────────────
+  function applyFontSize(size) {
+    if (!FONT_SIZES[size]) return;
+    currentFontSize = size;
+    html.setAttribute('data-fontsize', size);
+    html.style.fontSize = FONT_SIZES[size];
+    localStorage.setItem('siq-fontsize', size);
+    fontBtns.forEach(b => b.classList.toggle('active', b.dataset.size === size));
+  }
+
+  // ── Panel open/close ──────────────────────────────────────────────────────────
+  function openPanel() {
+    panel.classList.add('open');
+    overlay.classList.add('open');
+    toggleBtn.setAttribute('aria-expanded', 'true');
+    toggleBtn.classList.add('active');
+  }
+
+  function closePanel() {
+    panel.classList.remove('open');
+    overlay.classList.remove('open');
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    toggleBtn.classList.remove('active');
+  }
+
+  function togglePanel() {
+    panel.classList.contains('open') ? closePanel() : openPanel();
+  }
+
+  // ── Event listeners ───────────────────────────────────────────────────────────
+  toggleBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    togglePanel();
+  });
+
+  overlay.addEventListener('click', closePanel);
+
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', function() {
+      applyTheme(this.dataset.theme);
+      // Brief visual feedback then close
+      setTimeout(closePanel, 300);
+    });
+  });
+
+  fontBtns.forEach(btn => {
+    btn.addEventListener('click', function() {
+      applyFontSize(this.dataset.size);
+    });
+  });
+
+  // Keyboard: close on Escape
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closePanel();
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  applyTheme(currentTheme);
+  applyFontSize(currentFontSize);
+
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

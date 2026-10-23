@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Log in — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container py-5 fade-in">
+  <div class="row justify-content-center">
+    <div class="col-md-7 col-lg-5">
+      <div class="card analysis-card">
+        <div class="card-header">
+          <i class="bi bi-box-arrow-in-right me-2"></i><strong>Log in</strong>
+        </div>
+        <div class="card-body p-4">
+          <form method="POST" action="{{ url_for('auth.login', next=next_url) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            {% if next_url %}
+            <input type="hidden" name="next" value="{{ next_url }}"/>
+            {% endif %}
+            <div class="mb-3">
+              <label for="email" class="form-label">Email address</label>
+              <input id="email" name="email" type="email" class="form-control"
+                     value="{{ email }}" maxlength="254" autocomplete="email" required autofocus/>
+            </div>
+            <div class="mb-4">
+              <label for="password" class="form-label">Password</label>
+              <input id="password" name="password" type="password" class="form-control"
+                     autocomplete="current-password" required/>
+            </div>
+            <button type="submit" class="btn btn-analyze w-100">
+              <i class="bi bi-box-arrow-in-right me-2"></i>Log in
+            </button>
+          </form>
+          <p class="text-muted text-center small mt-4 mb-0">
+            New to SentimentIQ? <a href="{{ url_for('auth.register') }}">Create an account</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

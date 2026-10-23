@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}413 — File Too Large — SentimentIQ{% endblock %}
+{% block content %}
+<div class="error-page fade-in">
+  <div class="error-code text-warning">413</div>
+  <div class="error-icon text-warning"><i class="bi bi-cloud-slash-fill"></i></div>
+  <h2 class="error-title">File Too Large</h2>
+  <p class="error-desc text-muted">The file you uploaded exceeds the 32 MB limit. Please upload a smaller file.</p>
+  <div class="d-flex gap-3 justify-content-center mt-4">
+    <a href="{{ url_for('main.upload') }}" class="btn btn-analyze"><i class="bi bi-cloud-upload me-2"></i>Try Again</a>
+  </div>
+</div>
+{% endblock %}

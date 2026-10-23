@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}History — SentimentIQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-5">
+
+  <div class="page-header mb-4">
+    <h2 class="page-title"><i class="bi bi-clock-history me-2 text-primary"></i>Analysis History</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('main.export_data', fmt='csv') }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv me-1"></i>Export CSV
+      </a>
+      <a href="{{ url_for('main.export_data', fmt='json') }}" class="btn btn-sm btn-outline-warning">
+        <i class="bi bi-filetype-json me-1"></i>Export JSON
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card filter-card mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ url_for('main.history') }}" class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label small text-muted fw-semibold">Search Text</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" name="q" value="{{ search_query }}" placeholder="Keywords…"/>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted fw-semibold">Sentiment</label>
+          <select class="form-select" name="sentiment">
+            <option value="">All Sentiments</option>
+            <option value="positive" {% if sentiment_filter == 'positive' %}selected{% endif %}>😊 Positive</option>
+            <option value="negative" {% if sentiment_filter == 'negative' %}selected{% endif %}>😞 Negative</option>
+            <option value="neutral"  {% if sentiment_filter == 'neutral'  %}selected{% endif %}>😐 Neutral</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted fw-semibold">Source</label>
+          <select class="form-select" name="source">
+            <option value="">All Sources</option>
+            <option value="manual" {% if source_filter == 'manual' %}selected{% endif %}>✍️ Manual</option>
+            <option value="file"   {% if source_filter == 'file'   %}selected{% endif %}>📁 File Upload</option>
+            <option value="api"    {% if source_filter == 'api'    %}selected{% endif %}>🔌 API</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button type="submit" class="btn btn-primary flex-grow-1">
+            <i class="bi bi-funnel me-1"></i>Filter
+          </button>
+          <a href="{{ url_for('main.history') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-x"></i>
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Results Table -->
+  <div class="card score-card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>
+        <i class="bi bi-table me-2"></i>
+        <strong>{{ pagination.total }} Record{% if pagination.total != 1 %}s{% endif %}</strong>
+        {% if sentiment_filter or source_filter or search_query %}
+        <span class="badge bg-secondary ms-2">Filtered</span>
+        {% endif %}
+      </span>
+      <small class="text-muted">Page {{ pagination.page }} of {{ pagination.pages }}</small>
+    </div>
+    <div class="card-body p-0">
+      {% if pagination.items %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Text Preview</th>
+              <th>Final Sentiment</th>
+              <th>VADER</th>
+              <th>TextBlob</th>
+              <th>Compound</th>
+              <th>Words</th>
+              <th>Source</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in pagination.items %}
+            <tr>
+              <td class="text-muted small fw-semibold">#{{ r.id }}</td>
+              <td style="max-width:260px">
+                <div class="text-truncate small" title="{{ r.input_text }}">
+                  {{ r.input_text[:90] }}{% if r.input_text|length > 90 %}…{% endif %}
+                </div>
+              </td>
+              <td>
+                <span class="sentiment-badge badge-{{ r.final_sentiment }}">
+                  <i class="bi bi-{% if r.final_sentiment == 'positive' %}emoji-smile{% elif r.final_sentiment == 'negative' %}emoji-frown{% elif r.final_sentiment == 'mixed' %}emoji-smile-upside-down{% else %}emoji-neutral{% endif %} me-1"></i>
+                  {{ r.final_sentiment | capitalize }}
+                </span>
+              </td>
+              <td><span class="badge badge-sm badge-{{ r.vader_sentiment }}">{{ r.vader_sentiment | capitalize }}</span></td>
+              <td><span class="badge badge-sm badge-{{ r.textblob_sentiment }}">{{ r.textblob_sentiment | capitalize }}</span></td>
+              <td>
+                <span class="{% if (r.vader_compound or 0) >= 0.05 %}text-success{% elif (r.vader_compound or 0) <= -0.05 %}text-danger{% else %}text-warning{% endif %} fw-semibold small">
+                  {{ '%.3f'|format(r.vader_compound or 0) }}
+                </span>
+              </td>
+              <td class="text-muted small">{{ r.word_count }}</td>
+              <td>
+                <span class="badge {% if r.source_type == 'file' %}bg-info{% elif r.source_type == 'api' %}bg-secondary{% else %}bg-light text-dark{% endif %} small">
+                  {{ r.source_type | capitalize }}
+                </span>
+              </td>
+              <td class="text-muted small text-nowrap">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>
+                <div class="d-flex gap-1">
+                  <a href="{{ url_for('main.result', result_id=r.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2" title="View">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  <form action="{{ url_for('main.delete_result', result_id=r.id) }}"
+                        method="POST" class="d-inline"
+                        onsubmit="return confirm('Delete record #{{ r.id }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state py-5">
+        <i class="bi bi-inbox display-4 text-muted"></i>
+        <p class="text-muted mt-3">No records found. <a href="{{ url_for('main.index') }}">Analyse some text</a> to get started.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if pagination.pages > 1 %}
+    <div class="card-footer">
+      <nav>
+        <ul class="pagination pagination-sm mb-0 justify-content-center">
+          {% if pagination.has_prev %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.history', page=pagination.prev_num, sentiment=sentiment_filter, source=source_filter, q=search_query) }}">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          </li>
+          {% endif %}
+
+          {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('main.history', page=p, sentiment=sentiment_filter, source=source_filter, q=search_query) }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+
+          {% if pagination.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.history', page=pagination.next_num, sentiment=sentiment_filter, source=source_filter, q=search_query) }}">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Batch Uploads -->
+  {% if batches %}
+  <div class="card score-card">
+    <div class="card-header"><i class="bi bi-folder me-2"></i><strong>Recent Batch Uploads</strong></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Type</th>
+              <th>Records</th>
+              <th>Positive</th>
+              <th>Negative</th>
+              <th>Neutral</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in batches %}
+            <tr>
+              <td class="fw-semibold small">{{ b.filename }}</td>
+              <td><span class="badge bg-secondary">{{ b.file_type.upper() }}</span></td>
+              <td>{{ b.total_records }}</td>
+              <td class="text-success fw-semibold">{{ b.positive_count }}</td>
+              <td class="text-danger fw-semibold">{{ b.negative_count }}</td>
+              <td class="text-warning fw-semibold">{{ b.neutral_count }}</td>
+              <td class="text-muted small">{{ b.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>
+                <div class="d-flex gap-1">
+                  <a href="{{ url_for('main.batch_pdf_report', batch_id=b.id) }}" target="_blank" rel="noopener"
+                     class="btn btn-sm btn-outline-danger py-0 px-2" title="Open PDF report">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                  </a>
+                  <a href="{{ url_for('main.batch_result', batch_id=b.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2" title="View batch results">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  {% if b.uploaded_file %}
+                  <a href="{{ url_for('main.download_uploaded_file', file_id=b.uploaded_file.id) }}"
+                     class="btn btn-sm btn-outline-success py-0 px-2" title="Download original file">
+                    <i class="bi bi-download"></i>
+                  </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
